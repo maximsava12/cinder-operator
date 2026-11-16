@@ -1,3 +1,0 @@
-{
-  "command": "/usr/bin/cinder-scheduler --config-dir /etc/cinder/cinder.conf.d"
-}

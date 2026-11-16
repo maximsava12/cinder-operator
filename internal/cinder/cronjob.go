@@ -1,0 +1,147 @@
+/*
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package cinder
+
+import (
+	cinderv1 "github.com/openstack-k8s-operators/cinder-operator/api/v1beta1"
+
+	"fmt"
+	"maps"
+
+	"github.com/openstack-k8s-operators/lib-common/modules/common"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/pod"
+	"github.com/openstack-k8s-operators/lib-common/modules/users"
+
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
+)
+
+// CronJob func
+func CronJob(
+	instance *cinderv1.Cinder,
+	labels map[string]string,
+	annotations map[string]string,
+) *batchv1.CronJob {
+	configAccessMode := int32(0440)
+
+	dbPurgeCommand := fmt.Sprintf(
+		"/usr/bin/cinder-manage --debug --config-dir /etc/cinder/cinder.conf.d db purge %d",
+		instance.Spec.DBPurge.Age)
+
+	args := []string{"-c", dbPurgeCommand}
+
+	podLabels := maps.Clone(labels)
+	podLabels[common.ComponentSelector] = ComponentDBPurge
+
+	cronJobVolumes := []corev1.Volume{
+		{
+			Name: "db-purge-config-data",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					DefaultMode: &configAccessMode,
+					SecretName:  instance.Name + "-config-data",
+					Items: []corev1.KeyToPath{
+						{
+							Key:  DefaultsConfigFileName,
+							Path: DefaultsConfigFileName,
+						},
+						{
+							Key:  CustomConfigFileName,
+							Path: CustomConfigFileName,
+						},
+					},
+				},
+			},
+		},
+	}
+	cronJobVolumeMounts := []corev1.VolumeMount{
+		{
+			Name:      "db-purge-config-data",
+			MountPath: "/etc/cinder/cinder.conf.d",
+			ReadOnly:  true,
+		},
+		{
+			Name:      "config-data",
+			MountPath: "/etc/my.cnf",
+			SubPath:   MyCnfFileName,
+			ReadOnly:  true,
+		},
+	}
+
+	// add CA cert if defined
+	if instance.Spec.CinderAPI.TLS.CaBundleSecretName != "" {
+		cronJobVolumes = append(cronJobVolumes, instance.Spec.CinderAPI.TLS.CreateVolume())
+		cronJobVolumeMounts = append(cronJobVolumeMounts, instance.Spec.CinderAPI.TLS.CreateVolumeMounts(nil)...)
+	}
+
+	cronJobExtraMounts := []cinderv1.CinderExtraVolMounts{}
+
+	cronjob := &batchv1.CronJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        fmt.Sprintf("%s-db-purge", ServiceName),
+			Namespace:   instance.Namespace,
+			Annotations: annotations,
+			Labels:      podLabels,
+		},
+		Spec: batchv1.CronJobSpec{
+			Schedule:          instance.Spec.DBPurge.Schedule,
+			ConcurrencyPolicy: batchv1.ForbidConcurrent,
+			JobTemplate: batchv1.JobTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: annotations,
+					Labels:      podLabels,
+				},
+				Spec: batchv1.JobSpec{
+					Parallelism: ptr.To(int32(1)),
+					Completions: ptr.To(int32(1)),
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: annotations,
+							Labels:      podLabels,
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  ServiceName + "-db-purge",
+									Image: instance.Spec.CinderAPI.ContainerImage,
+									Command: []string{
+										"/bin/bash",
+									},
+									Args:            args,
+									VolumeMounts:    cronJobVolumeMounts,
+									SecurityContext: pod.RestrictiveSecurityContext(users.CinderUID, users.CinderGID),
+								},
+							},
+							Volumes:                      append(GetVolumes(instance.Name, false, cronJobExtraMounts, DbsyncPropagation), cronJobVolumes...),
+							RestartPolicy:                corev1.RestartPolicyNever,
+							ServiceAccountName:           instance.RbacResourceName(),
+							AutomountServiceAccountToken: ptr.To(false),
+							SecurityContext:              pod.RestrictivePodSecurityContext(users.CinderUID, users.CinderGID),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if instance.Spec.NodeSelector != nil {
+		cronjob.Spec.JobTemplate.Spec.Template.Spec.NodeSelector = *instance.Spec.NodeSelector
+	}
+
+	return cronjob
+}

@@ -1,3 +1,5 @@
+version: 2
+
 linters:
   # Enable specific linter
   # https://golangci-lint.run/usage/linters/#enabled-by-default
@@ -5,7 +7,19 @@ linters:
     - errorlint
     - revive
     - ginkgolinter
-    - gofmt
     - govet
+    - gosec
+    - errname
+    - err113
+  settings:
+    govet:
+      disable:
+        # TODO: re-enable once golangci-lint supports Go 1.26 inlining of generics
+        - inline
+
+formatters:
+  enable:
+    - gofmt
+
 run:
   timeout: 5m

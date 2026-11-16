@@ -1,6 +1,6 @@
 repos:
 - repo: https://github.com/golangci/golangci-lint
-  rev: v1.55.2
+  rev: v2.12.2
   hooks:
     - id: golangci-lint-full
       args: ["-v"]
@@ -30,6 +30,12 @@ repos:
       language: system
       entry: make
       args: ['operator-lint']
+      pass_filenames: false
+    - id: make-crd-schema-check
+      name: make-crd-schema-check
+      language: system
+      entry: make
+      args: ['crd-schema-check']
       pass_filenames: false
 
 - repo: https://github.com/pre-commit/pre-commit-hooks

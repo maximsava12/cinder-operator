@@ -20,7 +20,7 @@ package functional
 import (
 	"fmt"
 
-	"github.com/openstack-k8s-operators/cinder-operator/pkg/cinder"
+	"github.com/openstack-k8s-operators/cinder-operator/internal/cinder"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -28,45 +28,63 @@ const (
 	// MemcachedInstance - name of the memcached instance
 	MemcachedInstance = "memcached"
 	//PublicCertSecretName -
-	PublicCertSecretName = "public-tls-certs"
+	PublicCertSecretName = "public-tls-certs" // #nosec G101
 	//InternalCertSecretName -
-	InternalCertSecretName = "internal-tls-certs"
+	InternalCertSecretName = "internal-tls-certs" // #nosec G101
 	//CABundleSecretName -
-	CABundleSecretName = "combined-ca-bundle"
+	CABundleSecretName = "combined-ca-bundle" // #nosec G101
+	// CinderCephExtraMountsPath -
+	CinderCephExtraMountsPath = "/etc/ceph"
+	// CinderCephExtraMountsSecretName -
+	CinderCephExtraMountsSecretName = "ceph"
+	// ACTestServicePasswordSecret - secret name for AC test service password
+	ACTestServicePasswordSecret = "ac-test-osp-secret" // #nosec G101
+	// ACTestPasswordSelector - password selector for AC test
+	ACTestPasswordSelector = "CinderPassword"
 )
 
 // CinderTestData is the data structure used to provide input data to envTest
 type CinderTestData struct {
-	RabbitmqClusterName    string
-	RabbitmqSecretName     string
-	MemcachedInstance      string
-	CinderDataBaseAccount  string
-	CinderPassword         string
-	CinderServiceUser      string
-	DatabaseHostname       string
-	Instance               types.NamespacedName
-	CinderRole             types.NamespacedName
-	CinderRoleBinding      types.NamespacedName
-	CinderTransportURL     types.NamespacedName
-	CinderMemcached        types.NamespacedName
-	CinderSA               types.NamespacedName
-	CinderDBSync           types.NamespacedName
-	CinderKeystoneService  types.NamespacedName
-	CinderKeystoneEndpoint types.NamespacedName
-	CinderServicePublic    types.NamespacedName
-	CinderServiceInternal  types.NamespacedName
-	CinderConfigSecret     types.NamespacedName
-	CinderConfigScripts    types.NamespacedName
-	Cinder                 types.NamespacedName
-	CinderAPI              types.NamespacedName
-	CinderScheduler        types.NamespacedName
-	CinderVolumes          []types.NamespacedName
-	InternalAPINAD         types.NamespacedName
-	ContainerImage         string
-	CABundleSecret         types.NamespacedName
-	InternalCertSecret     types.NamespacedName
-	PublicCertSecret       types.NamespacedName
-	Database               types.NamespacedName
+	RabbitmqClusterName            string
+	RabbitmqSecretName             string
+	MemcachedInstance              string
+	NotificationSecretName         string
+	CinderDataBaseAccount          string
+	CinderPassword                 string
+	CinderInvalidPassword          string
+	CinderInvalidSecretName        string
+	CinderServiceUser              string
+	DatabaseHostname               string
+	Instance                       types.NamespacedName
+	CinderRole                     types.NamespacedName
+	CinderRoleBinding              types.NamespacedName
+	CinderTransportURL             types.NamespacedName
+	CinderTransportURLNotification types.NamespacedName
+	CinderMemcached                types.NamespacedName
+	CinderSA                       types.NamespacedName
+	CinderDBSync                   types.NamespacedName
+	CinderOnlineDataMigration      types.NamespacedName
+	CinderDBPurge                  types.NamespacedName
+	CinderKeystoneService          types.NamespacedName
+	CinderKeystoneEndpoint         types.NamespacedName
+	CinderBlockStorageService      types.NamespacedName
+	CinderBlockStorageEndpoint     types.NamespacedName
+	CinderServicePublic            types.NamespacedName
+	CinderServiceInternal          types.NamespacedName
+	CinderConfigSecret             types.NamespacedName
+	CinderConfigScripts            types.NamespacedName
+	Cinder                         types.NamespacedName
+	CinderAPI                      types.NamespacedName
+	CinderScheduler                types.NamespacedName
+	CinderBackup                   types.NamespacedName
+	CinderVolumes                  []types.NamespacedName
+	InternalAPINAD                 types.NamespacedName
+	ContainerImage                 string
+	CABundleSecret                 types.NamespacedName
+	InternalCertSecret             types.NamespacedName
+	PublicCertSecret               types.NamespacedName
+	Database                       types.NamespacedName
+	CinderTopologies               []types.NamespacedName
 }
 
 // GetCinderTestData is a function that initialize the CinderTestData
@@ -74,7 +92,7 @@ type CinderTestData struct {
 func GetCinderTestData(cinderName types.NamespacedName) CinderTestData {
 
 	m := cinderName
-	return CinderTestData{
+	return CinderTestData{ //nolint:gosec
 		Instance: m,
 
 		Cinder: types.NamespacedName{
@@ -84,6 +102,14 @@ func GetCinderTestData(cinderName types.NamespacedName) CinderTestData {
 		CinderDBSync: types.NamespacedName{
 			Namespace: cinderName.Namespace,
 			Name:      fmt.Sprintf("%s-db-sync", cinderName.Name),
+		},
+		CinderOnlineDataMigration: types.NamespacedName{
+			Namespace: cinderName.Namespace,
+			Name:      fmt.Sprintf("%s-online-data-migrations", cinderName.Name),
+		},
+		CinderDBPurge: types.NamespacedName{
+			Namespace: cinderName.Namespace,
+			Name:      "cinder-db-purge",
 		},
 		CinderAPI: types.NamespacedName{
 			Namespace: cinderName.Namespace,
@@ -103,6 +129,10 @@ func GetCinderTestData(cinderName types.NamespacedName) CinderTestData {
 				Name:      fmt.Sprintf("%s-volume-volume2", cinderName.Name),
 			},
 		},
+		CinderBackup: types.NamespacedName{
+			Namespace: cinderName.Namespace,
+			Name:      fmt.Sprintf("%s-backup", cinderName.Name),
+		},
 		CinderRole: types.NamespacedName{
 			Namespace: cinderName.Namespace,
 			Name:      fmt.Sprintf("cinder-%s-role", cinderName.Name),
@@ -118,6 +148,10 @@ func GetCinderTestData(cinderName types.NamespacedName) CinderTestData {
 		CinderTransportURL: types.NamespacedName{
 			Namespace: cinderName.Namespace,
 			Name:      fmt.Sprintf("%s-cinder-transport", cinderName.Name),
+		},
+		CinderTransportURLNotification: types.NamespacedName{
+			Namespace: cinderName.Namespace,
+			Name:      fmt.Sprintf("%s-cinder-transport-notifications", cinderName.Name),
 		},
 		CinderMemcached: types.NamespacedName{
 			Namespace: cinderName.Namespace,
@@ -148,19 +182,30 @@ func GetCinderTestData(cinderName types.NamespacedName) CinderTestData {
 			Namespace: cinderName.Namespace,
 			Name:      cinder.ServiceNameV3,
 		},
+		CinderBlockStorageService: types.NamespacedName{
+			Namespace: cinderName.Namespace,
+			Name:      cinder.ServiceNameBlockStorage,
+		},
+		CinderBlockStorageEndpoint: types.NamespacedName{
+			Namespace: cinderName.Namespace,
+			Name:      cinder.ServiceNameBlockStorage,
+		},
 		InternalAPINAD: types.NamespacedName{
 			Namespace: cinderName.Namespace,
 			Name:      "internalapi",
 		},
-		RabbitmqClusterName:   "rabbitmq",
-		RabbitmqSecretName:    "rabbitmq-secret",
-		MemcachedInstance:     MemcachedInstance,
-		CinderDataBaseAccount: "cinder",
+		RabbitmqClusterName:    "rabbitmq",
+		RabbitmqSecretName:     "rabbitmq-secret",
+		NotificationSecretName: "rabbitmq-notifications-secret",
+		MemcachedInstance:      MemcachedInstance,
+		CinderDataBaseAccount:  "cinder",
 		// Password used for both db and service
-		CinderPassword:    "12345678",
-		CinderServiceUser: "cinder",
-		ContainerImage:    "test://cinder",
-		DatabaseHostname:  "database-hostname",
+		CinderPassword:          "12345678",
+		CinderInvalidPassword:   "c^sometext02%text%text02$someText&",
+		CinderInvalidSecretName: "test-osp-secret-invalid",
+		CinderServiceUser:       "cinder",
+		ContainerImage:          "test://cinder",
+		DatabaseHostname:        "database-hostname",
 		CABundleSecret: types.NamespacedName{
 			Namespace: cinderName.Namespace,
 			Name:      CABundleSecretName,
@@ -176,6 +221,27 @@ func GetCinderTestData(cinderName types.NamespacedName) CinderTestData {
 		Database: types.NamespacedName{
 			Namespace: cinderName.Namespace,
 			Name:      cinder.DatabaseName,
+		},
+		// A set of topologies to Test how the reference is propagated to the
+		// resulting StatefulSets and if a potential override produces the
+		// expected values
+		CinderTopologies: []types.NamespacedName{
+			{
+				Namespace: cinderName.Namespace,
+				Name:      fmt.Sprintf("%s-global-topology", cinderName.Name),
+			},
+			{
+				Namespace: cinderName.Namespace,
+				Name:      fmt.Sprintf("%s-api-topology", cinderName.Name),
+			},
+			{
+				Namespace: cinderName.Namespace,
+				Name:      fmt.Sprintf("%s-scheduler-topology", cinderName.Name),
+			},
+			{
+				Namespace: cinderName.Namespace,
+				Name:      fmt.Sprintf("%s-volume-topology", cinderName.Name),
+			},
 		},
 	}
 }

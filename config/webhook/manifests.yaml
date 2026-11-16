@@ -2,7 +2,6 @@
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
-  creationTimestamp: null
   name: mutating-webhook-configuration
 webhooks:
 - admissionReviewVersions:
@@ -13,7 +12,7 @@ webhooks:
       namespace: system
       path: /mutate-cinder-openstack-org-v1beta1-cinder
   failurePolicy: Fail
-  name: mcinder.kb.io
+  name: mcinder-v1beta1.kb.io
   rules:
   - apiGroups:
     - cinder.openstack.org
@@ -29,7 +28,6 @@ webhooks:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
-  creationTimestamp: null
   name: validating-webhook-configuration
 webhooks:
 - admissionReviewVersions:
@@ -40,7 +38,7 @@ webhooks:
       namespace: system
       path: /validate-cinder-openstack-org-v1beta1-cinder
   failurePolicy: Fail
-  name: vcinder.kb.io
+  name: vcinder-v1beta1.kb.io
   rules:
   - apiGroups:
     - cinder.openstack.org

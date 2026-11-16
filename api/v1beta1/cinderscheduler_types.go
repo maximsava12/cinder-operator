@@ -17,10 +17,18 @@ limitations under the License.
 package v1beta1
 
 import (
+	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/probes"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// SchedulerOverrideSpec to override the generated manifest of several child resources.
+type SchedulerOverrideSpec struct {
+	// Override probes and other common fields in the StatefulSet
+	Probes probes.OverrideSpec `json:"probes,omitempty"`
+}
 
 // CinderSchedulerTemplate defines the input parameters for the Cinder Scheduler service
 type CinderSchedulerTemplateCore struct {
@@ -32,6 +40,10 @@ type CinderSchedulerTemplateCore struct {
 	// +kubebuilder:validation:Minimum=0
 	// Replicas - Cinder Scheduler Replicas
 	Replicas *int32 `json:"replicas"`
+
+	// +kubebuilder:validation:Optional
+	// Override, provides the ability to override the generated manifest of several child resources.
+	Override SchedulerOverrideSpec `json:"override,omitempty"`
 }
 
 // CinderSchedulerTemplate defines the input parameters for the Cinder Scheduler service
@@ -59,6 +71,9 @@ type CinderSchedulerSpec struct {
 	// Secret containing RabbitMq transport URL
 	TransportURLSecret string `json:"transportURLSecret"`
 
+	// Secret containing Notifications transport URL
+	NotificationsURLSecret string `json:"notificationsURLSecret,omitempty"`
+
 	// +kubebuilder:validation:Optional
 	// ExtraMounts containing conf files and credentials
 	ExtraMounts []CinderExtraVolMounts `json:"extraMounts,omitempty"`
@@ -71,6 +86,11 @@ type CinderSchedulerSpec struct {
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	// TLS - Parameters related to the TLS
 	TLS tls.Ca `json:"tls,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=memcached
+	// Memcached instance name.
+	MemcachedInstance *string `json:"memcachedInstance"`
 }
 
 // CinderSchedulerStatus defines the observed state of CinderScheduler
@@ -94,6 +114,13 @@ type CinderSchedulerStatus struct {
 	// controller has not started processing the latest changes, and the status
 	// and its conditions are likely stale.
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// LastAppliedTopology - the last applied Topology
+	LastAppliedTopology *topologyv1.TopoRef `json:"lastAppliedTopology,omitempty"`
+
+	// AppliedInputSecretHash is the hash of the input Secret consumed by the
+	// currently ready workload.
+	AppliedInputSecretHash string `json:"appliedInputSecretHash,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -130,4 +157,19 @@ func (instance CinderScheduler) IsReady() bool {
 		instance.Status.ReadyCount == *instance.Spec.Replicas &&
 		(instance.Status.Conditions.IsTrue(condition.DeploymentReadyCondition) ||
 			(instance.Status.Conditions.IsFalse(condition.DeploymentReadyCondition) && *instance.Spec.Replicas == 0))
+}
+
+// GetSpecTopologyRef - Returns the LastAppliedTopology Set in the Status
+func (instance *CinderScheduler) GetSpecTopologyRef() *topologyv1.TopoRef {
+	return instance.Spec.TopologyRef
+}
+
+// GetLastAppliedTopology - Returns the LastAppliedTopology Set in the Status
+func (instance *CinderScheduler) GetLastAppliedTopology() *topologyv1.TopoRef {
+	return instance.Status.LastAppliedTopology
+}
+
+// SetLastAppliedTopology - Sets the LastAppliedTopology value in the Status
+func (instance *CinderScheduler) SetLastAppliedTopology(topologyRef *topologyv1.TopoRef) {
+	instance.Status.LastAppliedTopology = topologyRef
 }

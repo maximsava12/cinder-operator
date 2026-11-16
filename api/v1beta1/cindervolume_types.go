@@ -17,7 +17,9 @@ limitations under the License.
 package v1beta1
 
 import (
+	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/probes"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -26,6 +28,13 @@ const (
 	// Backend -
 	Backend = "backend"
 )
+
+
+// VolumeOverrideSpec to override the generated manifest of several child resources.
+type VolumeOverrideSpec struct {
+	// Override probes and other common fields in the StatefulSet
+	Probes probes.OverrideSpec `json:"probes,omitempty"`
+}
 
 // CinderVolumeTemplate defines the input parameters for the Cinder Volume service
 type CinderVolumeTemplateCore struct {
@@ -38,6 +47,10 @@ type CinderVolumeTemplateCore struct {
 	// +kubebuilder:validation:Maximum=1
 	// Replicas - Cinder Volume Replicas
 	Replicas *int32 `json:"replicas"`
+
+	// +kubebuilder:validation:Optional
+	// Override, provides the ability to override the generated manifest of several child resources.
+	Override VolumeOverrideSpec `json:"override,omitempty"`
 }
 
 // CinderVolumeTemplate defines the input parameters for the Cinder Volume service
@@ -65,6 +78,9 @@ type CinderVolumeSpec struct {
 	// Secret containing RabbitMq transport URL
 	TransportURLSecret string `json:"transportURLSecret"`
 
+	// Secret containing Notifications transport URL
+	NotificationsURLSecret string `json:"notificationsURLSecret,omitempty"`
+
 	// +kubebuilder:validation:Optional
 	// ExtraMounts containing conf files and credentials
 	ExtraMounts []CinderExtraVolMounts `json:"extraMounts,omitempty"`
@@ -77,6 +93,11 @@ type CinderVolumeSpec struct {
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	// TLS - Parameters related to the TLS
 	TLS tls.Ca `json:"tls,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=memcached
+	// Memcached instance name.
+	MemcachedInstance *string `json:"memcachedInstance"`
 }
 
 // CinderVolumeStatus defines the observed state of CinderVolume
@@ -100,6 +121,13 @@ type CinderVolumeStatus struct {
 	// controller has not started processing the latest changes, and the status
 	// and its conditions are likely stale.
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// LastAppliedTopology - the last applied Topology
+	LastAppliedTopology *topologyv1.TopoRef `json:"lastAppliedTopology,omitempty"`
+
+	// AppliedInputSecretHash is the hash of the input Secret consumed by the
+	// currently ready workload.
+	AppliedInputSecretHash string `json:"appliedInputSecretHash,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -141,4 +169,19 @@ func (instance CinderVolume) IsReady() bool {
 // BackendName - returns the backend name of a CinderVolume instance based on the labels
 func (instance CinderVolume) BackendName() string {
 	return instance.Labels[Backend]
+}
+
+// GetSpecTopologyRef - Returns the LastAppliedTopology Set in the Status
+func (instance *CinderVolume) GetSpecTopologyRef() *topologyv1.TopoRef {
+	return instance.Spec.TopologyRef
+}
+
+// GetLastAppliedTopology - Returns the LastAppliedTopology Set in the Status
+func (instance *CinderVolume) GetLastAppliedTopology() *topologyv1.TopoRef {
+	return instance.Status.LastAppliedTopology
+}
+
+// SetLastAppliedTopology - Sets the LastAppliedTopology value in the Status
+func (instance *CinderVolume) SetLastAppliedTopology(topologyRef *topologyv1.TopoRef) {
+	instance.Status.LastAppliedTopology = topologyRef
 }

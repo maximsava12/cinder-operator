@@ -17,20 +17,19 @@ limitations under the License.
 package v1beta1
 
 import (
+	rabbitmqv1 "github.com/openstack-k8s-operators/infra-operator/apis/rabbitmq/v1beta1"
+	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	"github.com/openstack-k8s-operators/lib-common/modules/storage"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
-	// CinderUserID - Kolla's cinder UID comes from the 'cinder-user' in
-	// https://github.com/openstack/kolla/blob/master/kolla/common/users.py
-	CinderUserID = 42407
-	// CinderGroupID - Kolla's cinder GID
-	CinderGroupID = 42407
-
 	// DbSyncHash hash
 	DbSyncHash = "dbsync"
+
+	// OnlineDataMigrationHash hash
+	OnlineDataMigrationHash = "onlinedatamigration"
 
 	// DeploymentHash hash used to detect changes
 	DeploymentHash = "deployment"
@@ -38,20 +37,20 @@ const (
 	// Container image fall-back defaults
 
 	// CinderAPIContainerImage is the fall-back container image for CinderAPI
-	CinderAPIContainerImage = "quay.io/podified-antelope-centos9/openstack-cinder-api:current-podified"
+	CinderAPIContainerImage = "quay.io/openstack-s2i-containers/openstack-cinder-api:master-latest"
 	// CinderBackupContainerImage is the fall-back container image for CinderBackup
-	CinderBackupContainerImage = "quay.io/podified-antelope-centos9/openstack-cinder-backup:current-podified"
+	CinderBackupContainerImage = "quay.io/openstack-s2i-containers/openstack-cinder-backup:master-latest"
 	// CinderSchedulerContainerImage is the fall-back container image for CinderScheduler
-	CinderSchedulerContainerImage = "quay.io/podified-antelope-centos9/openstack-cinder-scheduler:current-podified"
+	CinderSchedulerContainerImage = "quay.io/openstack-s2i-containers/openstack-cinder-scheduler:master-latest"
 	// CinderVolumeContainerImage is the fall-back container image for CinderVolume
-	CinderVolumeContainerImage = "quay.io/podified-antelope-centos9/openstack-cinder-volume:current-podified"
+	CinderVolumeContainerImage = "quay.io/openstack-s2i-containers/openstack-cinder-volume:master-latest"
 
 	// DBPurgeDefaultAge - Default age, in days, for purging deleted DB records
 	DBPurgeDefaultAge = 30
 	// DBPurgeDefaultSchedule - Default cron schedule for purging the DB
 	DBPurgeDefaultSchedule = "1 0 * * *"
 	// APITimeoutDefault  - Default timeout in seconds for HAProxy, Apache, and RPCs
-	APITimeoutDefault  = 60
+	APITimeoutDefault = 60
 )
 
 type CinderSpecBase struct {
@@ -63,11 +62,19 @@ type CinderSpecBase struct {
 	// Might not be required in future
 	DatabaseInstance string `json:"databaseInstance"`
 
-	// +kubebuilder:validation:Required
-	// +kubebuilder:default=rabbitmq
+	// +kubebuilder:validation:Optional
 	// RabbitMQ instance name
 	// Needed to request a transportURL that is created and used in Cinder
-	RabbitMqClusterName string `json:"rabbitMqClusterName"`
+	// Deprecated: Use MessagingBus.Cluster instead
+	RabbitMqClusterName string `json:"rabbitMqClusterName,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// MessagingBus configuration (username, vhost, and cluster)
+	MessagingBus rabbitmqv1.RabbitMqConfig `json:"messagingBus,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// NotificationsBus configuration (username, vhost, and cluster) for notifications
+	NotificationsBus *rabbitmqv1.RabbitMqConfig `json:"notificationsBus,omitempty"`
 
 	// +kubebuilder:validation:Required
 	// +kubebuilder:default=memcached
@@ -93,7 +100,7 @@ type CinderSpecBase struct {
 	// NodeSelector to target subset of worker nodes running this service. Setting
 	// NodeSelector here acts as a default value and can be overridden by service
 	// specific NodeSelector Settings.
-	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+	NodeSelector *map[string]string `json:"nodeSelector,omitempty"`
 
 	// +kubebuilder:validation:Optional
 	// DBPurge parameters -
@@ -104,6 +111,22 @@ type CinderSpecBase struct {
 	// +kubebuilder:validation:Minimum=10
 	// APITimeout for HAProxy, Apache, and rpc_response_timeout
 	APITimeout int `json:"apiTimeout"`
+
+	// +kubebuilder:validation:Optional
+	// TopologyRef to apply the Topology defined by the associated CR referenced
+	// by name
+	TopologyRef *topologyv1.TopoRef `json:"topologyRef,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// RabbitMQ instance name used to request a transportURL that is used for
+	// notification purposes
+	// Deprecated: Use NotificationsBus.Cluster instead
+	NotificationsBusInstance *string `json:"notificationsBusInstance,omitempty" deprecated:"notificationsBus.cluster"`
+
+	// +kubebuilder:validation:Optional
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// Auth - Parameters related to authentication
+	Auth AuthSpec `json:"auth,omitempty"`
 }
 
 // CinderSpecCore the same as CinderSpec without ContainerImage references
@@ -117,9 +140,16 @@ type CinderSpecCore struct {
 	// CinderScheduler - Spec definition for the Scheduler service of this Cinder deployment
 	CinderScheduler CinderSchedulerTemplateCore `json:"cinderScheduler"`
 
+	// CinderBackup is DEPRECATED and will be removed in a future release.
+	// Use the separate CinderBackups resource instead.
 	// +kubebuilder:validation:Optional
-	// CinderBackup - Spec definition for the Backup service of this Cinder deployment
+	// +kubebuilder:deprecated:true
+	// +kubebuilder:deprecatedversion:warning="Cinder.Spec.CinderBackup is deprecated, use CinderBackups instead"
 	CinderBackup CinderBackupTemplateCore `json:"cinderBackup"`
+
+	// +kubebuilder:validation:Optional
+	// CinderBackups - Spec definition for the Backup service of this Cinder deployment
+	CinderBackups *map[string]CinderBackupTemplateCore `json:"cinderBackups,omitempty"`
 
 	// +kubebuilder:validation:Optional
 	// CinderVolumes - Map of chosen names to spec definitions for the Volume(s) service(s) of this Cinder deployment
@@ -143,6 +173,10 @@ type CinderSpec struct {
 	CinderBackup CinderBackupTemplate `json:"cinderBackup"`
 
 	// +kubebuilder:validation:Optional
+	// CinderBackups - Spec definition for the Backup service of this Cinder deployment
+	CinderBackups *map[string]CinderBackupTemplate `json:"cinderBackups,omitempty"`
+
+	// +kubebuilder:validation:Optional
 	// CinderVolumes - Map of chosen names to spec definitions for the Volume(s) service(s) of this Cinder deployment
 	CinderVolumes map[string]CinderVolumeTemplate `json:"cinderVolumes,omitempty"`
 }
@@ -158,8 +192,11 @@ type CinderStatus struct {
 	// Cinder Database Hostname
 	DatabaseHostname string `json:"databaseHostname,omitempty"`
 
-	// TransportURLSecret - Secret containing RabbitMQ transportURL
+	// TransportURLSecret - Secret containing RabbitMQ transportURL entries
 	TransportURLSecret string `json:"transportURLSecret,omitempty"`
+
+	// NotificationsURLSecret - Secret containing RabbitMQ notificationsURL
+	NotificationsURLSecret *string `json:"notificationsURLSecret,omitempty"`
 
 	// API endpoints
 	APIEndpoints map[string]map[string]string `json:"apiEndpoints,omitempty"`
@@ -177,6 +214,9 @@ type CinderStatus struct {
 	// +kubebuilder:default=0
 	CinderBackupReadyCount int32 `json:"cinderBackupReadyCount"`
 
+	// ReadyCounts of Cinder Backup instances
+	CinderBackupsReadyCounts map[string]int32 `json:"cinderBackupsReadyCounts,omitempty"`
+
 	// ReadyCount of Cinder Scheduler instance
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:default=0
@@ -190,6 +230,9 @@ type CinderStatus struct {
 	// controller has not started processing the latest changes, and the status
 	// and its conditions are likely stale.
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// ApplicationCredentialSecret - the AC secret cinder is currently consuming
+	ApplicationCredentialSecret string `json:"applicationCredentialSecret,omitempty"`
 }
 
 //+kubebuilder:object:root=true

@@ -11,6 +11,7 @@ running RHEL for computes (and maybe swift).
 
 Some links of interest:
 
+- [Persistent Storage Guide](docs/user-guide/index.md)
 - [OpenStack Kubernetes Operators](https://github.com/openstack-k8s-operators/)
 - [Developer Docs](https://github.com/openstack-k8s-operators/dev-docs)
 - [User Docs](https://openstack-k8s-operators.github.io/openstack-operator/)
@@ -59,7 +60,7 @@ control plane:
 
 ```sh
 oc kustomize \
-  https://github.com/openstack-k8s-operators/cinder-operator.git/config/samples/backends/lvm/iscsi?ref=main \
+  https://github.com/openstack-k8s-operators/cinder-operator/tree/main/config/samples/backends/lvm/iscsi \
   > ~/openstack-deployment.yaml
 
 oc label node --all openstack.org/cinder-lvm=
@@ -101,6 +102,8 @@ oc exec -t openstackclient -- openstack compute service list
 - [Configure Cinder with additional networks](docs/additional_network.md)
 - [Expose Cinder API to an isolated network](docs/api_isolated_network.md)
 - [Configure Cinder with Ceph backend](docs/ceph_backend.md)
+- [Customize httpd](config/samples/httpd-overrides): inject custom httpd
+  configuration through extraMounts interface
 - [Contributing](CONTRIBUTING.md)
 
 ## Troubleshooting
